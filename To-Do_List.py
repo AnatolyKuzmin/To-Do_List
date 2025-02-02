@@ -1,180 +1,301 @@
+import tkinter as tk
+from tkinter import messagebox, simpledialog
 import json
-from tkinter import Tk, Label, Entry, Button, Listbox, messagebox, StringVar, OptionMenu
+import csv
+from datetime import datetime
 
-# Имя файла для хранения задач
-TASKS_FILE = 'tasks.json'
+class Task:
+    def __init__(self, description, completed=False, deadline=None, priority="средний", category=None):
+        self.description = description
+        self.completed = completed
+        self.deadline = deadline
+        self.priority = priority
+        self.category = category
 
-######
+    def __str__(self):
+        status = "✓" if self.completed else "✗"
+        deadline_info = f", Дедлайн: {self.deadline}" if self.deadline else ""
+        priority_info = f", Приоритет: {self.priority}" if self.priority else ""
+        category_info = f", Категория: {self.category}" if self.category else ""
+        return f"[{status}] {self.description}{deadline_info}{priority_info}{category_info}"
 
-def load_tasks():
-    """Загружает задачи из файла"""
-    try:
-        with open(TASKS_FILE, 'r') as file:
-            return json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        messagebox.showwarning("Предупреждение", "Файл задач не найден или поврежден. Создан новый список задач.")
-        return []
-    
-def save_tasks(tasks):
-    """Сохраняет задачи в файл"""
-    with open(TASKS_FILE, 'w') as file:
-        json.dump(tasks, file)
+class ToDoList:
+    def __init__(self, name):
+        self.name = name
+        self.tasks = []
 
-def add_task(tasks, task_text, priority):
-    """Добавляет новую задачу"""
-    if not task_text.strip():
-        messagebox.showerror("Ошибка", "Текст задачи не может быть пустым.")
-        return
-    task = {"text": task_text, "priority": priority, "completed": False}
-    tasks.append(task)
-    save_tasks(tasks)
-    messagebox.showinfo("Успех", f"Задача '{task_text}' добавлена")
+    def add_task(self, description, deadline=None, priority="средний", category=None):
+        task = Task(description, deadline=deadline, priority=priority, category=category)
+        self.tasks.append(task)
 
-def remove_task(tasks, index):
-    """Удаляет задачу по индексу."""
-    if 0 <= index < len(tasks):
-        removed_task = tasks.pop(index)
-        messagebox.showinfo("Успех", f"Задача '{removed_task['text']}' удалена.")
-    else:
-        messagebox.showerror("Ошибка", "Неверный номер задачи.")
+    def view_tasks(self):
+        return [str(task) for task in self.tasks]
 
-def mark_task_completed(tasks, index):
-    """Помечает задачу как выполненную."""
-    if 0 <= index < len(tasks):
-        tasks[index]["completed"] = True
-        save_tasks(tasks)
-        messagebox.showinfo("Успех", f"Задача '{tasks[index]['text']}' помечена как выполненная.")
-    else:
-        messagebox.showerror("Ошибка", "Неверный номер задачи.")
+    def mark_task_completed(self, task_number):
+        if 1 <= task_number <= len(self.tasks):
+            self.tasks[task_number - 1].completed = True
 
-def view_tasks(tasks, filter_completed=None):
-    """Отображает задачи с учетом фильтрации по статусу."""
-    filtered_tasks = tasks
-    if filter_completed is not None:
-        filtered_tasks = [task for task in tasks if task["completed"] == filter_completed]
-    return filtered_tasks
+    def delete_task(self, task_number):
+        if 1 <= task_number <= len(self.tasks):
+            self.tasks.pop(task_number - 1)
 
-def edit_task(tasks, index, new_text, new_priority):
-    """Редактирует задачу по индексу."""
-    if 0 <= index < len(tasks):
-        tasks[index]["text"] = new_text
-        tasks[index]["priority"] = new_priority
-        save_tasks(tasks)
-        messagebox.showinfo("Успех", f"Задача '{new_text}' отредактирована.")
-    else:
-        messagebox.showerror("Ошибка", "Неверный номер задачи.")
+    def edit_task(self, task_number, new_description):
+        if 1 <= task_number <= len(self.tasks):
+            self.tasks[task_number - 1].description = new_description
 
-def sort_tasks_by_priority(tasks):
-    """Сортирует задачи по приоритету."""
-    priority_order = {"Низкий": 1, "Средний": 2, "Высокий": 3}
-    tasks.sort(key=lambda x: priority_order[x["priority"]], reverse=True)
+    def set_deadline(self, task_number, deadline):
+        if 1 <= task_number <= len(self.tasks):
+            self.tasks[task_number - 1].deadline = deadline
 
-######
+    def set_priority(self, task_number, priority):
+        if 1 <= task_number <= len(self.tasks):
+            self.tasks[task_number - 1].priority = priority
 
-class TaskManagerApp:
+    def set_category(self, task_number, category):
+        if 1 <= task_number <= len(self.tasks):
+            self.tasks[task_number - 1].category = category
+
+    def sort_tasks(self, completed_first=True):
+        self.tasks.sort(key=lambda task: task.completed == completed_first, reverse=True)
+
+    def save_to_file(self, filename=None):
+        if not filename:
+            filename = f"{self.name}.json"
+        with open(filename, "w", encoding="utf-8") as file:
+            tasks_data = [{"description": task.description, "completed": task.completed, "deadline": task.deadline, "priority": task.priority, "category": task.category} for task in self.tasks]
+            json.dump(tasks_data, file, indent=4, ensure_ascii=False)
+
+    def load_from_file(self, filename=None):
+        if not filename:
+            filename = f"{self.name}.json"
+        try:
+            with open(filename, "r", encoding="utf-8") as file:
+                tasks_data = json.load(file)
+                self.tasks = [Task(task["description"], task["completed"], task["deadline"], task["priority"], task["category"]) for task in tasks_data]
+        except FileNotFoundError:
+            pass
+
+    def export_to_csv(self, filename=None):
+        if not filename:
+            filename = f"{self.name}.csv"
+        with open(filename, "w", encoding="utf-8", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Описание", "Статус", "Дедлайн", "Приоритет", "Категория"])
+            for task in self.tasks:
+                status = "Выполнена" if task.completed else "Не выполнена"
+                writer.writerow([task.description, status, task.deadline, task.priority, task.category])
+
+    def check_deadlines(self):
+        today = datetime.today().date()
+        reminders = []
+        for task in self.tasks:
+            if task.deadline:
+                deadline_date = datetime.strptime(task.deadline, "%Y-%m-%d").date()
+                if deadline_date == today:
+                    reminders.append(f"Напоминание: задача '{task.description}' должна быть выполнена сегодня.")
+                elif deadline_date < today:
+                    reminders.append(f"Напоминание: задача '{task.description}' просрочена.")
+        return reminders
+
+class ToDoApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Менеджер задач")
+        self.root.title("ToDo List App")
+        self.lists = {}
+        self.current_list = None
 
-        self.tasks = load_tasks()
+        self.list_frame = tk.Frame(self.root)
+        self.list_frame.pack(pady=10)
 
-        Label(root, text="Список задач").pack(pady=5)
-        self.task_listbox = Listbox(root, width=50, height=15)
-        self.task_listbox.pack(pady=10)
+        self.list_label = tk.Label(self.list_frame, text="Списки задач:")
+        self.list_label.pack()
 
-        Label(root, text="Текст задачи").pack(pady=5)
-        self.task_entry = Entry(root, width=40)
-        self.task_entry.pack(pady=5)
-        
-        Label(root, text="Приоритет").pack(pady=5)
-        self.priority_var = StringVar(root)
-        self.priority_var.set("Низкий")
-        self.priority_menu = OptionMenu(root, self.priority_var, "Низкий", "Средний", "Высокий")
-        self.priority_menu.pack(pady=5)
+        self.listbox = tk.Listbox(self.list_frame, width=50)
+        self.listbox.pack()
 
-        self.add_button = Button(root, text="Добавить задачу", command=add_task)
-        self.add_button.pack(pady=5)
+        self.task_frame = tk.Frame(self.root)
+        self.task_frame.pack(pady=10)
 
-        self.remove_button = Button(root, text="Удалить задачу", command=remove_task)
-        self.remove_button.pack(pady=5)
+        self.task_label = tk.Label(self.task_frame, text="Задачи:")
+        self.task_label.pack()
 
-        self.complete_button = Button(root, text="Пометить как выполненную", command=mark_task_completed)
-        self.complete_button.pack(pady=5)
+        self.task_listbox = tk.Listbox(self.task_frame, width=50)
+        self.task_listbox.pack()
 
-        Label(root, text="Фильтр задач").pack(pady=5)
-        self.filter_var = StringVar(root)
-        self.filter_var.set("Все")
-        self.filter_menu = OptionMenu(root, self.filter_var, "Все", "Выполненные", "Невыполненные", command=self.filter_tasks)
-        self.filter_menu.pack(pady=5)
+        self.button_frame = tk.Frame(self.root)
+        self.button_frame.pack(pady=10)
 
-        self.edit_button = Button(root, text="Редактировать задачу", command=self.edit_task)
-        self.edit_button.pack(pady=5)
+        self.create_list_button = tk.Button(self.button_frame, text="Создать список", command=self.create_list)
+        self.create_list_button.grid(row=0, column=0, padx=5)
 
-        self.sort_button = Button(root, text="Сортировать по приоритету", command=self.sort_tasks)
-        self.sort_button.pack(pady=5)
+        self.select_list_button = tk.Button(self.button_frame, text="Выбрать список", command=self.select_list)
+        self.select_list_button.grid(row=0, column=1, padx=5)
 
-        self.update_task_list()
+        self.add_task_button = tk.Button(self.button_frame, text="Добавить задачу", command=self.add_task)
+        self.add_task_button.grid(row=0, column=2, padx=5)
 
-    def update_task_list(self):
-        """Обновляет список задач в интерфейсе."""
-        self.task_listbox.delete(0, 'end')
-        filter_value = self.filter_var.get()
-        if filter_value == "Выполненные":
-            tasks_to_show = view_tasks(self.tasks, True)
-        elif filter_value == "Невыполненные":
-            tasks_to_show = view_tasks(self.tasks, False)
-        else:
-            tasks_to_show = self.tasks
+        self.mark_completed_button = tk.Button(self.button_frame, text="Отметить выполненной", command=self.mark_completed)
+        self.mark_completed_button.grid(row=0, column=3, padx=5)
 
-        if len(tasks_to_show):
-            for task in tasks_to_show:
-                status = "✓" if task["completed"] else "✗"
-                self.task_listbox.insert('end', f"{task['text']} [Приоритет: {task['priority']}] [{status}]")
+        self.delete_task_button = tk.Button(self.button_frame, text="Удалить задачу", command=self.delete_task)
+        self.delete_task_button.grid(row=0, column=4, padx=5)
 
-    def remove_task(self):
-        """Удаляет задачу через интерфейс."""
-        try:
-            selected_task_index = self.task_listbox.curselection()[0]
-            remove_task(self.tasks, selected_task_index)
-            self.update_task_list()
-        except IndexError:
-            messagebox.showerror("Ошибка", "Выберите задачу для удаления.")
+        self.edit_task_button = tk.Button(self.button_frame, text="Редактировать задачу", command=self.edit_task)
+        self.edit_task_button.grid(row=1, column=0, padx=5)
 
-    def mark_task_completed(self):
-        """Помечает задачу как выполненную через интерфейс."""
-        try:
-            selected_task_index = self.task_listbox.curselection()[0]
-            mark_task_completed(self.tasks, selected_task_index)
-            self.update_task_list()
-        except IndexError:
-            messagebox.showerror("Ошибка", "Выберите задачу для отметки.")
+        self.set_deadline_button = tk.Button(self.button_frame, text="Установить дедлайн", command=self.set_deadline)
+        self.set_deadline_button.grid(row=1, column=1, padx=5)
 
-    def filter_tasks(self, *args):
-        """Фильтрует задачи по статусу."""
-        self.update_task_list()
+        self.set_priority_button = tk.Button(self.button_frame, text="Установить приоритет", command=self.set_priority)
+        self.set_priority_button.grid(row=1, column=2, padx=5)
+
+        self.set_category_button = tk.Button(self.button_frame, text="Установить категорию", command=self.set_category)
+        self.set_category_button.grid(row=1, column=3, padx=5)
+
+        self.sort_tasks_button = tk.Button(self.button_frame, text="Сортировать задачи", command=self.sort_tasks)
+        self.sort_tasks_button.grid(row=1, column=4, padx=5)
+
+        self.save_tasks_button = tk.Button(self.button_frame, text="Сохранить задачи", command=self.save_tasks)
+        self.save_tasks_button.grid(row=2, column=0, padx=5)
+
+        self.export_csv_button = tk.Button(self.button_frame, text="Экспорт в CSV", command=self.export_csv)
+        self.export_csv_button.grid(row=2, column=1, padx=5)
+
+        self.delete_list_button = tk.Button(self.button_frame, text="Удалить список", command=self.delete_list)
+        self.delete_list_button.grid(row=2, column=2, padx=5)
+
+        self.check_deadlines_button = tk.Button(self.button_frame, text="Проверить дедлайны", command=self.check_deadlines)
+        self.check_deadlines_button.grid(row=2, column=3, padx=5)
+
+        self.exit_button = tk.Button(self.button_frame, text="Выйти", command=self.root.quit)
+        self.exit_button.grid(row=2, column=4, padx=5)
+
+        self.update_listbox()
+
+    def update_listbox(self):
+        self.listbox.delete(0, tk.END)
+        for list_name in self.lists:
+            self.listbox.insert(tk.END, list_name)
+
+    def update_task_listbox(self):
+        self.task_listbox.delete(0, tk.END)
+        if self.current_list:
+            for task in self.current_list.view_tasks():
+                self.task_listbox.insert(tk.END, task)
+
+    def create_list(self):
+        list_name = simpledialog.askstring("Создать список", "Введите название списка задач:")
+        if list_name:
+            self.lists[list_name] = ToDoList(list_name)
+            self.current_list = self.lists[list_name]
+            self.update_listbox()
+
+    def select_list(self):
+        selected = self.listbox.curselection()
+        if selected:
+            list_name = self.listbox.get(selected)
+            self.current_list = self.lists[list_name]
+            self.update_task_listbox()
+
+    def add_task(self):
+        if self.current_list:
+            description = simpledialog.askstring("Добавить задачу", "Введите описание задачи:")
+            if description:
+                deadline = simpledialog.askstring("Добавить задачу", "Введите дедлайн (опционально, формат ГГГГ-ММ-ДД):")
+                priority = simpledialog.askstring("Добавить задачу", "Введите приоритет (высокий, средний, низкий):")
+                category = simpledialog.askstring("Добавить задачу", "Введите категорию (опционально):")
+                self.current_list.add_task(description, deadline if deadline else None, priority, category if category else None)
+                self.update_task_listbox()
+
+    def mark_completed(self):
+        if self.current_list:
+            selected = self.task_listbox.curselection()
+            if selected:
+                task_number = selected[0] + 1
+                self.current_list.mark_task_completed(task_number)
+                self.update_task_listbox()
+
+    def delete_task(self):
+        if self.current_list:
+            selected = self.task_listbox.curselection()
+            if selected:
+                task_number = selected[0] + 1
+                self.current_list.delete_task(task_number)
+                self.update_task_listbox()
 
     def edit_task(self):
-        """Редактирует задачу через интерфейс."""
-        try:
-            selected_task_index = self.task_listbox.curselection()[0]
-            new_text = self.task_entry.get()
-            new_priority = self.priority_var.get()
-            if not new_text.strip():
-                messagebox.showerror("Ошибка", "Текст задачи не может быть пустым.")
-                return
-            edit_task(self.tasks, selected_task_index, new_text, new_priority)
-            self.update_task_list()
-        except IndexError:
-            messagebox.showerror("Ошибка", "Выберите задачу для редактирования.")
+        if self.current_list:
+            selected = self.task_listbox.curselection()
+            if selected:
+                task_number = selected[0] + 1
+                new_description = simpledialog.askstring("Редактировать задачу", "Введите новое описание задачи:")
+                if new_description:
+                    self.current_list.edit_task(task_number, new_description)
+                    self.update_task_listbox()
+
+    def set_deadline(self):
+        if self.current_list:
+            selected = self.task_listbox.curselection()
+            if selected:
+                task_number = selected[0] + 1
+                deadline = simpledialog.askstring("Установить дедлайн", "Введите дедлайн (формат ГГГГ-ММ-ДД):")
+                if deadline:
+                    self.current_list.set_deadline(task_number, deadline)
+                    self.update_task_listbox()
+
+    def set_priority(self):
+        if self.current_list:
+            selected = self.task_listbox.curselection()
+            if selected:
+                task_number = selected[0] + 1
+                priority = simpledialog.askstring("Установить приоритет", "Введите приоритет (высокий, средний, низкий):")
+                if priority:
+                    self.current_list.set_priority(task_number, priority)
+                    self.update_task_listbox()
+
+    def set_category(self):
+        if self.current_list:
+            selected = self.task_listbox.curselection()
+            if selected:
+                task_number = selected[0] + 1
+                category = simpledialog.askstring("Установить категорию", "Введите категорию:")
+                if category:
+                    self.current_list.set_category(task_number, category)
+                    self.update_task_listbox()
 
     def sort_tasks(self):
-        """Сортирует задачи по приоритету и обновляет список."""
-        sort_tasks_by_priority(self.tasks)
-        self.update_task_list()
+        if self.current_list:
+            sort_order = simpledialog.askstring("Сортировать задачи", "Сортировать по выполненным задачам сначала? (да/нет):")
+            if sort_order:
+                self.current_list.sort_tasks(sort_order.lower() == "да")
+                self.update_task_listbox()
 
-######
+    def save_tasks(self):
+        if self.current_list:
+            self.current_list.save_to_file()
+
+    def export_csv(self):
+        if self.current_list:
+            self.current_list.export_to_csv()
+
+    def delete_list(self):
+        selected = self.listbox.curselection()
+        if selected:
+            list_name = self.listbox.get(selected)
+            del self.lists[list_name]
+            self.update_listbox()
+            self.current_list = None
+            self.task_listbox.delete(0, tk.END)
+
+    def check_deadlines(self):
+        if self.current_list:
+            reminders = self.current_list.check_deadlines()
+            if reminders:
+                messagebox.showinfo("Напоминания", "\n".join(reminders))
+            else:
+                messagebox.showinfo("Напоминания", "Нет задач с дедлайнами на сегодня или просроченных задач.")
 
 if __name__ == "__main__":
-    root = Tk()
-    app = TaskManagerApp(root)
+    root = tk.Tk()
+    app = ToDoApp(root)
     root.mainloop()
