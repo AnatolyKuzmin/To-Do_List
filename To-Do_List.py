@@ -237,6 +237,7 @@ class ToDoApp:
         if selected:
             list_name = self.listbox.get(selected)
             self.current_list = self.lists[list_name]
+            self.current_list.load_tasks()
             self.update_task_listbox()
 
     def add_task(self):
@@ -305,12 +306,15 @@ class ToDoApp:
                     self.current_list.set_category(task_number, category)
                     self.update_task_listbox()
 
-    def sort_tasks(self):
+    def set_category(self):
         if self.current_list:
-            sort_order = simpledialog.askstring("Сортировать задачи", "Сортировать по выполненным задачам сначала? (да/нет):")
-            if sort_order:
-                self.current_list.sort_tasks(sort_order.lower() == "да")
-                self.update_task_listbox()
+            selected = self.task_listbox.curselection()
+            if selected:
+                task_number = selected[0] + 1
+                category = simpledialog.askstring("Установить категорию", "Введите категорию:")
+                if category:
+                    self.current_list.set_category(task_number, category)
+                    self.update_task_listbox()
 
     def save_tasks(self):
         if self.current_list:
