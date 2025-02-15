@@ -3,6 +3,7 @@ from tkinter import messagebox, simpledialog
 import json
 import csv
 from datetime import datetime
+import sqlite3
 
 class Task:
     def __init__(self, description, completed=False, deadline=None, priority="средний", category=None):
@@ -23,10 +24,34 @@ class ToDoList:
     def __init__(self, name):
         self.name = name
         self.tasks = []
+        self.load_tasks()
+
+    def load_tasks(self):
+        conn = sqlite3.connect('todo.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM lists WHERE name = ?", (self.name,))
+        list_id = cursor.fetchone()
+        if list_id:
+            list_id = list_id[0]
+            cursor.execute("SELECT description, completed, deadline, priority, category FROM tasks WHERE list_id = ?", (list_id,))
+            self.tasks = [Task(task[0], task[1], task[2], task[3], task[4]) for task in cursor.fetchall()]
+        conn.close()
 
     def add_task(self, description, deadline=None, priority="средний", category=None):
-        task = Task(description, deadline=deadline, priority=priority, category=category)
-        self.tasks.append(task)
+        conn = sqlite3.connect('todo.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM lists WHERE name = ?", (self.name,))
+        list_id = cursor.fetchone()
+        if not list_id:
+            cursor.execute("INSERT INTO lists (name) VALUES (?)", (self.name,))
+            list_id = cursor.lastrowid
+        else:
+            list_id = list_id[0]
+        cursor.execute("INSERT INTO tasks (list_id, description, deadline, priority, category) VALUES (?, ?, ?, ?, ?)",
+                       (list_id, description, deadline, priority, category))
+        conn.commit()
+        conn.close()
+        self.tasks.append(Task(description, False, deadline, priority, category))
 
     def view_tasks(self):
         return [str(task) for task in self.tasks]
@@ -34,10 +59,16 @@ class ToDoList:
     def mark_task_completed(self, task_number):
         if 1 <= task_number <= len(self.tasks):
             self.tasks[task_number - 1].completed = True
+            self.save_tasks()
 
     def delete_task(self, task_number):
         if 1 <= task_number <= len(self.tasks):
-            self.tasks.pop(task_number - 1)
+            task = self.tasks.pop(task_number - 1)
+            conn = sqlite3.connect('todo.db')
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM tasks WHERE description = ?", (task.description,))
+            conn.commit()
+            conn.close()
 
     def edit_task(self, task_number, new_description):
         if 1 <= task_number <= len(self.tasks):
@@ -96,12 +127,23 @@ class ToDoList:
                 elif deadline_date < today:
                     reminders.append(f"Напоминание: задача '{task.description}' просрочена.")
         return reminders
+    
+    def save_tasks(self):
+        conn = sqlite3.connect('todo.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM lists WHERE name = ?", (self.name,))
+        list_id = cursor.fetchone()[0]
+        for task in self.tasks:
+            cursor.execute("UPDATE tasks SET completed = ?, deadline = ?, priority = ?, category = ? WHERE description = ? AND list_id = ?",
+                           (task.completed, task.deadline, task.priority, task.category, task.description, list_id))
+        conn.commit()
+        conn.close()
 
 class ToDoApp:
     def __init__(self, root):
         self.root = root
         self.root.title("ToDo List App")
-        self.lists = {}
+        self.lists = self.load_lists()
         self.current_list = None
 
         self.list_frame = tk.Frame(self.root)
@@ -294,6 +336,14 @@ class ToDoApp:
                 messagebox.showinfo("Напоминания", "\n".join(reminders))
             else:
                 messagebox.showinfo("Напоминания", "Нет задач с дедлайнами на сегодня или просроченных задач.")
+
+    def load_lists(self):
+        conn = sqlite3.connect('todo.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM lists")
+        lists = {row[0]: ToDoList(row[0]) for row in cursor.fetchall()}
+        conn.close()
+        return lists
 
 if __name__ == "__main__":
     root = tk.Tk()
