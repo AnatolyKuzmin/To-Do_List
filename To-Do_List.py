@@ -1,9 +1,10 @@
-import tkinter as tk
-from tkinter import messagebox, simpledialog
 import json
-import csv
-from datetime import datetime
 import sqlite3
+import csv
+import tkinter as tk
+
+from tkinter import messagebox, simpledialog
+from datetime import datetime
 
 class Task:
     def __init__(self, description, completed=False, deadline=None, priority="средний", category=None):
@@ -138,6 +139,24 @@ class ToDoList:
                            (task.completed, task.deadline, task.priority, task.category, task.description, list_id))
         conn.commit()
         conn.close()
+    
+    def delete_list(self):
+        conn = sqlite3.connect('todo.db')
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM lists WHERE name = ?", (self.name,))
+        cursor.execute("DELETE FROM tasks WHERE list_id = (SELECT id FROM lists WHERE name = ?)", (self.name,))
+        conn.commit()
+        conn.close()
+
+    def export_to_csv(self, filename=None):
+        if not filename:
+            filename = f"{self.name}.csv"
+        with open(filename, "w", encoding="utf-8", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Описание", "Статус", "Дедлайн", "Приоритет", "Категория"])
+            for task in self.tasks:
+                status = "Выполнена" if task.completed else "Не выполнена"
+                writer.writerow([task.description, status, task.deadline, task.priority, task.category])
 
 class ToDoApp:
     def __init__(self, root):
@@ -328,6 +347,7 @@ class ToDoApp:
         selected = self.listbox.curselection()
         if selected:
             list_name = self.listbox.get(selected)
+            self.lists[list_name].delete_list()
             del self.lists[list_name]
             self.update_listbox()
             self.current_list = None
@@ -348,6 +368,11 @@ class ToDoApp:
         lists = {row[0]: ToDoList(row[0]) for row in cursor.fetchall()}
         conn.close()
         return lists
+
+    def export_csv(self):
+        if self.current_list:
+            self.current_list.export_to_csv()
+            messagebox.showinfo("Экспорт", "Задачи успешно экспортированы в CSV-файл.")
 
 if __name__ == "__main__":
     root = tk.Tk()
